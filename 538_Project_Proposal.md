@@ -8,7 +8,7 @@
 
 
 
-### 1. What is the problem or task that you propose to solve? 
+### 1. What is the problem or task that you propose to solve? (Omkar)
 
 When you are chatting with your friend, you seldom type a whole body of the message and press send. Instead you will type one message after another and your friend knows to respond when you have specified the required information. 
 
@@ -26,7 +26,7 @@ A variant of this task appears in speech processing where the sentence boundarie
 
 
 
-### 2. What is interesting about this problem from an NLP perspective? 
+### 2. What is interesting about this problem from an NLP perspective? (Omkar) 
 
 The problem requires an agent to understand or learn following things about natural language:
 
@@ -37,8 +37,11 @@ The problem requires an agent to understand or learn following things about natu
 
 
 
-### 3. What technical method or approach will you use?
+### 3. What technical method or approach will you use? (Anh)
 
-1. On what data will you run your system?
-2. How will you evaluate the performance of your system?
-3. What NLP-related difficulties and challenges do you anticipate?
+### 4. On what data will you run your system? (Sriram)
+
+### 5. How will you evaluate the performance of your system? (Omkar + Anh + Sriram)
+
+### 6. What NLP-related difficulties and challenges do you anticipate?
+
