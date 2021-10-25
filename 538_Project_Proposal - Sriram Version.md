@@ -69,6 +69,14 @@ When ever we see the ECON token, we should pass the context vector or sequence o
 
 ### 4. On what data will you run your system? (Sriram)
 
+The datasets that provide multiple text inputs for the context are needed to explain and understand when the reply is to be sent or wait till one more message is needed for the reply. For example, 
+
+MultiWOZ - DataSet: Each dialogue consists of a goal, multiple user and system utterances as well as a belief state. Even though all dialogues are coherent, some of them were not finished in terms of task description. There are multipple occurences where the scentence is comple but the intent is not complete. We can use this dataset to understand/learn whether the message that user wants to convey has been done or not. This defines/helps in when the chatbot/user2 will reply or wait for the incoming message.
+
+DailyDialog - DataSet: The dialogues in the dataset reflect our daily communication way and cover various topics about our daily life. We also manually label the developed dataset with communication intention and emotion information. 
+
+
+
 ### 5. How will you evaluate the performance of your system? (Omkar + Anh + Sriram)
 
 * For the first approach, I think we should use Precision Recall and try to minimize the False Positive. It's bad when the chatbot interupts user being talking.
