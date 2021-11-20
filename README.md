@@ -31,6 +31,7 @@ gzip -d cc.en.300.bin.gz
 ```
 
 After that, put these files into **/pretrain/**
+
 Install huggingface Transformers
 
 ```bash
