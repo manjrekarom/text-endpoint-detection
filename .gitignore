@@ -1,0 +1,5 @@
+runs/
+pretrain/
+checkpoints/
+__pycache__
+.DS_Store
