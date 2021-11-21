@@ -20,6 +20,8 @@ from utils import train_test_split
 from dataloader import SentenceDataset
 from embeddings.glove import GloveModel
 from embeddings.fasttext import FastTextModel
+from embeddings.BERT_embedding import BERTEmbModel
+#from embeddings.BERT_embedding import
 from embeddings.tokenizer import SpacyTokenizer
 from utils import load_glove, flat_accuracy, generate_mask_fasttext, generate_model_path
 
@@ -29,12 +31,12 @@ parser = argparse.ArgumentParser(description="Train Detection Endpoint")
 parser.add_argument('--pos-data', '--pos', type=str, required=False, default="dataset/sentiment/pos.txt", help="path to positive dataset")
 parser.add_argument('--neg-data', '--neg', type=str, required=False, default="dataset/sentiment/neg.txt", help='path to negative dataset')
 parser.add_argument("--ratio", type=float, default=0.2, help="Train test split ratio")
-parser.add_argument('--embedding', type=str, required=False, default="fasttext", help="choose embedding to model: glove, fasttext, BERT")
+parser.add_argument('--embedding', type=str, required=False, default="bert", help="choose embedding to model: glove, fasttext, BERT")
 parser.add_argument('--model', type=str, required=False, default="GRU", help="choose model to train: GRU, LSTM, CNN, BERT")
 parser.add_argument('--batch-size', '--batch', type=int, default=64, help="batch size")
 parser.add_argument('--epoch', type=int, default=20, help="Number of training epoch(s)")
 parser.add_argument("--lr", type=float, default=3e-5, help="Learning rate")
-parser.add_argument("--glove", type=str, default = "glove.6B.300d.txt")
+parser.add_argument("--glove", type=str, default = "pretrain/glove.6B.300d.txt")
 
 args = parser.parse_args()
 
@@ -93,21 +95,35 @@ elif args.embedding == "fasttext":
     tokenizer = SpacyTokenizer(max_sequence_length=MAX_SEQ)
     model = FastTextModel(NUM_CLASS, model=args.model)
 elif args.embedding == "bert":
-    pass
+    from transformers import BertTokenizer
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', model_max_length=MAX_SEQ, additional_special_tokens = ["<ECON>"])
+    if args.model == "bert":
+        # Pure BERT
+        from model.BERT import BERTModel
+        model = BERTModel(num_class=NUM_CLASS)
+    else:
+        # BERT Embedding with other models
+        model = BERTEmbModel(NUM_CLASS, model=args.model)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = model.to(device)
-optimizer = optim.AdamW(model.parameters(), lr = args.lr, )
+optimizer = optim.AdamW(model.parameters(), lr = args.lr)
+scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=2)
 criterion = nn.CrossEntropyLoss().to(device)
 
 best_val_acc = 0
+best_val_epoch = 1
 # writer = SummaryWriter(os.path.join('runs', tb_path))
 writer = SummaryWriter()
 
 for epoch in range(EPOCHS):
-    #print('======== Epoch {:} / {:} ========'.format(epoch + 1, EPOCHS))
+    model.train()
     total_train_loss = 0
     total_train_accuracy = None
+
+    # Keep track of LR during scheduler testing
+    writer.add_scalar("Learning rate", optimizer.param_groups[0]['lr'])
+
     with tqdm(train_loader, unit="batch") as tepoch:
         for step, batch in enumerate(tepoch):
             tepoch.set_description("Epoch {}/{}".format(epoch+1, EPOCHS))
@@ -121,6 +137,13 @@ for epoch in range(EPOCHS):
                 data, mask = generate_mask_fasttext(ft, tokenizer, pad_vector, batch[0], max_sequence_length=MAX_SEQ)
                 data = data.to(device)
                 pred = model(data, mask)
+            elif args.embedding == "bert":
+                if args.model == "bert":
+                    data = tokenizer(batch[0], padding=True, truncation=True, return_tensors="pt").to(device)
+                    pred = model(data)
+                else:
+                    data = tokenizer(batch[0], padding=True, truncation=True, return_tensors="pt")['input_ids'].to(device)
+                    pred = model(data)
 
             loss = criterion(pred, label)
             optimizer.zero_grad()
@@ -148,6 +171,7 @@ for epoch in range(EPOCHS):
     # ====== Validation ==========
     total_val_loss = 0
     total_val_accuracy = None
+    model.eval()
     for step, batch in enumerate(eval_loader):
         label = batch[1].to(device)
         if args.embedding == "glove":
@@ -160,6 +184,14 @@ for epoch in range(EPOCHS):
             with torch.no_grad():
                 data = data.to(device)
                 pred = model(data, mask)
+        elif args.embedding == "bert":
+            with torch.no_grad():
+                if args.model == "bert":
+                    data = tokenizer(batch[0], padding=True, truncation=True, return_tensors="pt").to(device)
+                    pred = model(data)
+                else:
+                    data = tokenizer(batch[0], padding=True, truncation=True, return_tensors="pt")['input_ids'].to(device)
+                    pred = model(data)            
 
         total_val_loss += loss.item()
         logits = nn.functional.softmax(pred, dim=1).detach().cpu().numpy()
@@ -170,11 +202,17 @@ for epoch in range(EPOCHS):
             total_val_accuracy = np.concatenate([total_val_accuracy, flat_accuracy(logits, label_ids)])     
         writer.add_scalar("Validation loss", total_val_loss/(step+1))
     val_accuracy = total_val_accuracy.sum()/len(total_val_accuracy)
-    print("Validation accuracy: {}, loss: {}".format(round(100*val_accuracy, 2), total_val_loss/(step+1)), "\n")
+    print("Validation accuracy: {}, loss: {}".format(round(100*val_accuracy, 2), total_val_loss/(step+1)))
     writer.add_scalar("Validation accuracy", val_accuracy)
     
+    # Track val loss each epoch on Scheduler
+    scheduler.step(total_val_loss/(step+1))
+
     # ====== Save model ==========
     if val_accuracy > best_val_acc:
+        best_val_acc = val_accuracy
+        best_val_epoch = step + 1
+        print("Found a better model. Saving ...")
         torch.save({'epoch': epoch,
                     'num_class': NUM_CLASS,
                     'max_seq_length': MAX_SEQ,
@@ -199,3 +237,6 @@ for epoch in range(EPOCHS):
                 'tokenizer': tokenizer,
                 }, os.path.join(save_path,'model.tar'))
 
+    print()
+
+print("Best val accuracy {} on epoch {}".format(best_val_acc, best_val_epoch))
