@@ -37,3 +37,9 @@ Install huggingface Transformers
 ```bash
 pip install transformers
 ```
+
+- Training the model
+
+```bash
+python train.py --pos-data dataset/sentiment/pos.txt --neg-data dataaset/sentiment/neg.txt --embedding glove --model gru
+```
