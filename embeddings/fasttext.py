@@ -5,9 +5,9 @@ Last modified on Nov 18, 2021
 """
 import torch
 import torch.nn as nn
-from model.GRU import GRUModel
-from model.LSTM import LSTMModel
-from model.CNN import CNNModel
+from clf_model.GRU import GRUModel
+from clf_model.LSTM import LSTMModel
+from clf_model.CNN import CNNModel
 
 class FastTextModel(nn.Module):
     def __init__(self, num_class, model = "GRU", max_sequence_length=32):
