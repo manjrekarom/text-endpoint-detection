@@ -211,7 +211,7 @@ for epoch in range(EPOCHS):
     # ====== Save model ==========
     if val_accuracy > best_val_acc:
         best_val_acc = val_accuracy
-        best_val_epoch = step + 1
+        best_val_epoch = epoch + 1
         print("Found a better model. Saving ...")
         torch.save({'epoch': epoch,
                     'num_class': NUM_CLASS,

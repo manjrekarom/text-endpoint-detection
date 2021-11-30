@@ -4,7 +4,9 @@ Created on Nov 29, 2021
 Last modified on Nov 29, 2021
 
 =============================
-Implementation of Attention + Seq2Seq model
+Implementation of Attention + Seq2Seq model with Teacher Forcing
+
+Idea is based on "Sequence Labeling Approach to the Task of Sentence Boundary Detection" by Le et al
 """
 import random
 import torch
@@ -12,14 +14,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class Encoder(nn.Module):
-    def __init__(self, embedding_matrix, hidden_dim, num_layers=2,max_sequence_length=32):
+    def __init__(self, embedding_matrix, enc_hidden_dim, dec_hidden_dim, num_layers=1,max_sequence_length=64):
         super().__init__()
         # using GloVe embedding
         self.embedding = nn.Embedding.from_pretrained(embedding_matrix)
         embedding_dim = embedding_matrix.shape[-1]
-        self.LSTMs = nn.LSTM(embedding_dim, hidden_dim, num_layers=num_layers, batch_first=True, dropout=0.3, bidirectional=True)
+        self.GRUs = nn.GRU(embedding_dim, enc_hidden_dim, num_layers=num_layers, batch_first=True, bidirectional=True)
+        
+        self.hidden_dim = (int(self.GRUs.bidirectional)+1)*num_layers*enc_hidden_dim
 
-        self.hidden_dim = (int(self.LSTMs.bidirectional)+1)*hidden_dim
+        self.fc_hidden = nn.Linear(self.hidden_dim, dec_hidden_dim)
 
     def forward(self, sequence):
         """
@@ -36,11 +40,13 @@ class Encoder(nn.Module):
                     last cell state of RNN
         """
         emb = self.embedding(sequence)
-        outputs, (hidden, cell) = self.LSTMs(emb)
+        outputs, hidden = self.GRUs(emb)
         
         # Return hidden of every token
         # And cell for input cell of Decoder (also a stacked LSTM)
-        return outputs, hidden, cell 
+        hidden = self.fc_hidden(torch.flatten(torch.swapaxes(hidden, 0, 1), 1, 2))
+
+        return outputs, hidden.unsqueeze(0)
 
     def get_hidden_dim(self):
         return self.hidden_dim
@@ -74,22 +80,23 @@ class AttDecoder(nn.Module):
     A step of Decoder
     Run multiple time in decoding process
     """
-    def __init__(self, word2idx, enc_hidden_dim, embedding_dim, hidden_dim, num_layers=1, max_sequence_length=32):
+    def __init__(self, word2idx, enc_hidden_dim, embedding_dim, dec_hidden_dim, num_layers=1, max_sequence_length=64):
         super().__init__()
         # Embedding Layer
         #self.word2idx = word2idx # Dictionary of index to word
         self.embedding = nn.Embedding(len(word2idx), embedding_dim)
 
         # RNN Layer
-        self.LSTMs = nn.LSTM(embedding_dim + 2*hidden_dim, hidden_dim, num_layers=num_layers, batch_first=True, dropout=0.3, bidirectional=False) # Only 1 direction
+        self.GRUs = nn.GRU(embedding_dim + enc_hidden_dim, dec_hidden_dim, num_layers=num_layers, batch_first=True, bidirectional=False) # Only 1 direction
 
         # Attention Layer
-        self.att_layer = AttentionLayer(enc_hidden_dim, hidden_dim)
+        self.att_layer = AttentionLayer(enc_hidden_dim, dec_hidden_dim)
 
         # Output layer
-        self.output = nn.Linear(hidden_dim, len(word2idx))
+        self.output = nn.Linear(dec_hidden_dim, len(word2idx))
 
-    def forward(self, input_tokens, hidden, cell, enc_outputs):
+    # def forward(self, input_tokens, hidden, cell, enc_outputs):
+    def forward(self, input_tokens, hidden, enc_outputs):
         """
         Inputs: 
             input: [batch_size] a word of target vocabulary 
@@ -103,19 +110,20 @@ class AttDecoder(nn.Module):
         input_tokens = input_tokens.unsqueeze(-1) # [batch_size, 1]
         emb = self.embedding(input_tokens) # [batch_size, 1, embedding_dim]
         att_scores = self.att_layer(hidden, enc_outputs).unsqueeze(1) # [batch_size, 1, max_seq_length]
-        print(att_scores.shape)
+        # print(att_scores.shape)
 
         hidden_input = torch.bmm(att_scores, enc_outputs) # [batch_size, 1, 2*hidden_dim]
         rnn_input = torch.cat([emb, hidden_input], dim=-1) # [batch_size, 1, 2*hidden_dim + emb_dim]
 
-        output, (hidden, cell) = self.LSTMs(rnn_input, (hidden, cell))
+        output, hidden = self.GRUs(rnn_input, hidden)
+        #print(output.shape, output.squeeze(1).shape)
+        
+        pred = self.output(output.squeeze(1))
 
-        pred = self.output(output.squeeze())
-
-        return pred, hidden, cell
+        return pred, hidden
 
 class AttSeq2Seq(nn.Module):
-    def __init__(self, encoder, decoder, device, max_sequence_length=32):
+    def __init__(self, encoder, decoder, device, max_sequence_length=64):
         super().__init__()
         # Target words only contain <ECON> and <WORD>
         # self.target_word2idx = {"<WORD>": 0, # normal words
@@ -143,21 +151,24 @@ class AttSeq2Seq(nn.Module):
         dec_vocab_size = self.decoder.embedding.weight.shape[0]
         res = torch.zeros((batch_size, self.max_sequence_length, dec_vocab_size)).to(self.device)
 
-        enc_outputs, enc_hidden, enc_cell = self.encoder(input_seq)
+        #enc_outputs, enc_hidden, enc_cell = self.encoder(input_seq)
+        enc_outputs, enc_hidden = self.encoder(input_seq)
 
         dec_inputs = torch.ones((batch_size,), dtype=torch.int64) # First input to decoder
 
         for i in range(self.max_sequence_length):
-            pred, dec_hidden, dec_cell = self.decoder(dec_inputs, enc_hidden, enc_cell, enc_outputs)
+            pred, dec_hidden = self.decoder(dec_inputs, enc_hidden, enc_outputs)
             res[:, i, :] = pred
-            
-            if random.random > teacher_forcing_ratio and training:
-                dec_inputs = target_seq[:, min(i+1, self.max_sequence_length), :]
-                print("DEBUG", dec_inputs.shape)
+            #print("DEBUG", pred.shape)
+            if random.random() > teacher_forcing_ratio and training:
+                dec_inputs = target_seq[:, min(i+1, self.max_sequence_length-1)]
+                #print("DEBUG", dec_inputs.shape)
             else:
                 dec_inputs = torch.argmax(F.softmax(pred, dim=1), dim=1)
-                print("DEBUG", dec_inputs.shape)
-
+                # if len(dec_inputs.shape) == 0:
+                #     # When batch has only 1 example
+                #     dec_inputs = dec_inputs.unsqueeze(0)
+                # #print("DEBUG", dec_inputs.shape)
         return res
 
 
