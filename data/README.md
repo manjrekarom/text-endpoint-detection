@@ -23,7 +23,7 @@ Copy the multiwoz dataset from https://github.com/budzianowski/multiwoz.
 
 To generate positive and negative examples from multiwoz dataset use following command:
 ```
-python text-endpoint-detection/generate_training.py \
+python generate_training.py \
 --dataroot ./multiwoz/data/MultiWOZ_2.2/ \
 --split train \
 --domains restaurant hotel \
@@ -35,7 +35,7 @@ of positive and negative sentences. Train the model with this dataset using `clf
 
 To transform positive and negative examples for sequence labeling use following command:
 ```
-python text-endpoint-detection/transform_seq2seq.py positives.txt negatives.txt 
+python transform_seq2seq.py positives.txt negatives.txt 
 ```
 This will generate two files source.txt and target.txt. Train the model with this dataset
 using `seq_train.py`
