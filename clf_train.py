@@ -15,7 +15,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 # from sklearn.model_selection import train_test_split
-from utils import train_test_split
+from utils import AverageMeter, calc_metrics, train_test_split
 
 from dataloader import SentenceDataset
 from embeddings.glove import GloveModel
@@ -24,6 +24,7 @@ from embeddings.BERT_embedding import BERTEmbModel
 #from embeddings.BERT_embedding import
 from embeddings.tokenizer import SpacyTokenizer
 from utils import load_glove, flat_accuracy, generate_mask_fasttext, generate_model_path
+from utils import calc_f1, calc_precision, calc_recall, calc_metrics_binary
 
 from preprocess import preprocess
 
@@ -99,7 +100,7 @@ elif args.embedding == "bert":
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', model_max_length=MAX_SEQ, additional_special_tokens = ["<ECON>"])
     if args.model == "bert":
         # Pure BERT
-        from model.BERT import BERTModel
+        from clf_model.BERT import BERTModel
         model = BERTModel(num_class=NUM_CLASS)
     else:
         # BERT Embedding with other models
@@ -120,6 +121,10 @@ for epoch in range(EPOCHS):
     model.train()
     total_train_loss = 0
     total_train_accuracy = None
+    tp = AverageMeter(averaged=False)
+    tn = AverageMeter(averaged=False)
+    fp = AverageMeter(averaged=False)
+    fn = AverageMeter(averaged=False)
 
     # Keep track of LR during scheduler testing
     writer.add_scalar("Learning rate", optimizer.param_groups[0]['lr'])
@@ -154,6 +159,13 @@ for epoch in range(EPOCHS):
 
             logits = nn.functional.softmax(pred.detach().cpu(), dim=1).numpy()
             label_ids = batch[1].cpu().numpy()
+            # calculate stuff for f1 and pr
+            tp_batch, tn_batch, fp_batch, fn_batch = calc_metrics_binary(logits, label_ids)
+            tp.update(tp_batch)
+            tn.update(tn_batch)
+            fp.update(fp_batch)
+            fn.update(fn_batch)
+
             if total_train_accuracy is None:
                 total_train_accuracy = flat_accuracy(logits, label_ids)
             else:
@@ -164,9 +176,18 @@ for epoch in range(EPOCHS):
             tepoch.set_postfix(loss = curr_loss)
 
     train_accuracy = total_train_accuracy.sum()/len(total_train_accuracy)
+    precision = calc_precision(tp.sum, fp.sum)
+    recall = calc_precision(tp.sum, fn.sum)
+    f1 = calc_f1(precision, recall)
+    
     writer.add_scalar("Training accuracy", train_accuracy)
-
+    writer.add_scalar("Precision", precision)
+    writer.add_scalar("Recall", recall)
+    writer.add_scalar("F1", f1)
+    
+    # print("Accuracy by tp, tns...:", (tp.sum + tn.sum)/(tp.sum+tn.sum+fp.sum+fn.sum))
     print("Train accuracy: {}, loss: {}".format(round(100*train_accuracy, 2), curr_loss))
+    print(f"Precision: {precision}, Recall: {recall}, F1: {f1}")
 
     # ====== Validation ==========
     total_val_loss = 0
@@ -236,7 +257,6 @@ for epoch in range(EPOCHS):
                 'loss': loss,
                 'tokenizer': tokenizer,
                 }, os.path.join(save_path,'model.tar'))
-
     print()
 
 print("Best val accuracy {} on epoch {}".format(best_val_acc, best_val_epoch))
