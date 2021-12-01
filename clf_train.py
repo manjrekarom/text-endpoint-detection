@@ -77,7 +77,7 @@ eval_loader = DataLoader(eval_dataset, batch_size = BATCH_SIZE, shuffle=True)
 
 # Create directory for model checkpoints
 save_path, tb_path = generate_model_path(args.model, args.embedding)
-os.mkdir(save_path)
+os.makedirs(save_path)
 print("Checkpoints will be saved into {}".format(save_path))
 
 embedding_size = None
