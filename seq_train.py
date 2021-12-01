@@ -70,10 +70,14 @@ train_source, eval_source = train_test_split(source, test_size = args.ratio)
 train_target, eval_target = train_test_split(target, test_size = args.ratio)
 
 train_dataset = SentenceDataset(train_source, train_target)
-train_loader = DataLoader(train_dataset, batch_size = BATCH_SIZE, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size = BATCH_SIZE, shuffle=True) 
 
 eval_dataset = SentenceDataset(eval_source, eval_target)
 eval_loader = DataLoader(eval_dataset, batch_size = BATCH_SIZE, shuffle=True)
+
+save_path, tb_path = generate_model_path("seq", args.model)
+os.mkdir(save_path)
+print("Checkpoints will be saved into {}".format(save_path))
 
 def process_target(target, target_vocab=target_vocab):
     res = []
@@ -87,8 +91,6 @@ def process_target(target, target_vocab=target_vocab):
         res.append(tmp)
     return torch.tensor(res)
 
-embedding_matrix, word_to_idx, idx_to_wor = load_glove(args.glove)
-tokenizer = SpacyTokenizer(word_to_idx = word_to_idx, max_sequence_length=MAX_SEQ)
 
 """ Note about dimensions
 Encoder: Bidirectional
@@ -112,6 +114,8 @@ Decoder:
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 if args.model == "seq2seq":
+    embedding_matrix, word_to_idx, idx_to_wor = load_glove(args.glove)
+    tokenizer = SpacyTokenizer(word_to_idx = word_to_idx, max_sequence_length=MAX_SEQ)
     encoder = Encoder(torch.tensor(embedding_matrix), HIDDEN_DIM, HIDDEN_DIM).to(device)
     decoder = AttDecoder(target_vocab, encoder.get_hidden_dim(),embedding_matrix.shape[1], HIDDEN_DIM).to(device)
 
@@ -215,32 +219,32 @@ for epoch in range(EPOCHS):
     if val_accuracy > best_val_acc:
         best_val_acc = val_accuracy
         best_val_epoch = epoch + 1
-    #     print("Found a better model. Saving ...")
-    #     torch.save({'epoch': epoch,
-    #                 'num_class': NUM_CLASS,
-    #                 'max_seq_length': MAX_SEQ,
-    #                 'model': args.model,
-    #                 'embedding_size': embedding_size,
-    #                 'embedding': args.embedding,
-    #                 'model_state_dict': model.state_dict(),
-    #                 'optimizer_state_dict': optimizer.state_dict(),
-    #                 'loss': loss,
-    #                 'tokenizer': tokenizer,
-    #                 }, os.path.join(save_path,'best.tar'))
+        print("Found a better model. Saving ...")
+        torch.save({'epoch': epoch,
+                    'vocab': target_vocab,
+                    'max_seq_length': MAX_SEQ,
+                    'model': args.model,
+                    # 'embedding_size': embedding_size,
+                    # 'embedding': args.embedding,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'loss': loss,
+                    'tokenizer': tokenizer,
+                    }, os.path.join(save_path,'best.tar'))
 
-    # torch.save({'epoch': epoch,
-    #             'num_class': NUM_CLASS,
-    #             'max_seq_length': MAX_SEQ,
-    #             'model': args.model,
-    #             'embedding_size': embedding_size,
-    #             'embedding': args.embedding,
-    #             'model_state_dict': model.state_dict(),
-    #             'optimizer_state_dict': optimizer.state_dict(),
-    #             'loss': loss,
-    #             'tokenizer': tokenizer,
-    #             }, os.path.join(save_path,'model.tar'))
+    torch.save({'epoch': epoch,
+                'vocab': target_vocab,
+                'max_seq_length': MAX_SEQ,
+                'model': args.model,
+                # 'embedding_size': embedding_size,
+                # 'embedding': args.embedding,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': loss,
+                'tokenizer': tokenizer,
+                }, os.path.join(save_path,'model.tar'))
 
-    # print()
+    print()
 
 print("Best val accuracy {} on epoch {}".format(best_val_acc, best_val_epoch))
 
