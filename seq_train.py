@@ -112,8 +112,9 @@ Decoder:
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 if args.model == "seq2seq":
-    encoder = Encoder(torch.tensor(embedding_matrix), HIDDEN_DIM, HIDDEN_DIM)
-    decoder = AttDecoder(target_vocab, encoder.get_hidden_dim(),embedding_matrix.shape[1], HIDDEN_DIM)
+    encoder = Encoder(torch.tensor(embedding_matrix), HIDDEN_DIM, HIDDEN_DIM).to(device)
+    decoder = AttDecoder(target_vocab, encoder.get_hidden_dim(),embedding_matrix.shape[1], HIDDEN_DIM).to(device)
+
     model = AttSeq2Seq(encoder, decoder, device)
 
 elif args.model == "bert":
@@ -138,6 +139,7 @@ for epoch in range(EPOCHS):
     model.train()
     total_train_loss = 0
     total_train_accuracy = 0
+    total_train_tokens = 0
 
     # Keep track of LR during scheduler testing
     writer.add_scalar("Learning rate", optimizer.param_groups[0]['lr'])
@@ -163,13 +165,15 @@ for epoch in range(EPOCHS):
 
             logits = torch.argmax(nn.functional.softmax(pred.detach().cpu(), dim=-1), dim=-1).numpy()
             label_ids = label.cpu().numpy()
-            total_train_accuracy += (logits == label_ids).sum()
+            mask = label_ids != target_vocab["<PAD>"] # Not taking the <PAD> into consideration
+            total_train_accuracy += (logits == label_ids)[mask].sum()
+            total_train_tokens += mask.sum()
 
             curr_loss = total_train_loss/(step+1)
             writer.add_scalar("Training loss", curr_loss)
             tepoch.set_postfix(loss = curr_loss)
 
-    train_accuracy = total_train_accuracy/(len(train_source)*MAX_SEQ)
+    train_accuracy = total_train_accuracy/total_train_tokens
     writer.add_scalar("Training accuracy", train_accuracy)
 
     print("Train accuracy: {}, loss: {}".format(round(100*train_accuracy, 2), curr_loss))
@@ -177,10 +181,11 @@ for epoch in range(EPOCHS):
     # ====== Validation ==========
     total_val_loss = 0
     total_val_accuracy = 0
+    total_val_tokens = 0
     model.eval()
     for step, batch in enumerate(eval_loader):
         label = process_target(batch[1]).to(device)
-        
+
         if args.model == "seq2seq":
             data = tokenizer(batch[0]).to(device)
             pred = model(data, label, training=False) # Turn off teacher forcing
@@ -192,12 +197,14 @@ for epoch in range(EPOCHS):
 
         logits = torch.argmax(nn.functional.softmax(pred.detach().cpu(), dim=-1), dim=-1).numpy()
         label_ids = label.cpu().numpy()
-        total_val_accuracy += (logits == label_ids).sum()
+        mask = label_ids != target_vocab["<PAD>"]
+        total_val_accuracy += (logits == label_ids)[mask].sum()
+        total_val_tokens += mask.sum()
 
         curr_loss = total_val_loss/(step+1)
 
         writer.add_scalar("Validation loss", total_val_loss/(step+1))
-    val_accuracy = total_val_accuracy/(len(eval_source)*MAX_SEQ)
+    val_accuracy = total_val_accuracy/total_val_tokens
     print("Validation accuracy: {}, loss: {}".format(round(100*val_accuracy, 2), total_val_loss/(step+1)))
     writer.add_scalar("Validation accuracy", val_accuracy)
     

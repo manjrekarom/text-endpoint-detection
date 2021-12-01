@@ -140,8 +140,8 @@ class AttSeq2Seq(nn.Module):
 
         self.max_sequence_length = max_sequence_length
         self.device = device
-        self.encoder = encoder
-        self.decoder = decoder
+        self.encoder = encoder.to(device)
+        self.decoder = decoder.to(device)
 
     def forward(self, input_seq, target_seq, teacher_forcing_ratio=0.5, training = True):
         """
@@ -154,7 +154,7 @@ class AttSeq2Seq(nn.Module):
         #enc_outputs, enc_hidden, enc_cell = self.encoder(input_seq)
         enc_outputs, enc_hidden = self.encoder(input_seq)
 
-        dec_inputs = torch.ones((batch_size,), dtype=torch.int64) # First input to decoder
+        dec_inputs = torch.ones((batch_size,), dtype=torch.int64).to(self.device) # First input to decoder
 
         for i in range(self.max_sequence_length):
             pred, dec_hidden = self.decoder(dec_inputs, enc_hidden, enc_outputs)
