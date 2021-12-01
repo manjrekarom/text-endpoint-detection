@@ -34,7 +34,7 @@ from preprocess import preprocess
 parser = argparse.ArgumentParser(description="Train Detection Endpoint")
 parser.add_argument('--source', '--pos', type=str, required=False, default="dataset/endpoint/seq_source.txt", help="path to source sequences dataset")
 parser.add_argument('--target', '--neg', type=str, required=False, default="dataset/endpoint/seq_target.txt", help='path to target sequences dataset')
-parser.add_argument('--model', type=str, required=False, default="bert", help="choose model to train: seq2seq, BERT, greedy")
+parser.add_argument('--model', type=str, required=False, default="seq2seq", help="choose model to train: seq2seq, BERT, greedy")
 parser.add_argument("--ratio", type=float, default=0.2, help="Train test split ratio")
 parser.add_argument('--batch-size', '--batch', type=int, default=64, help="batch size")
 parser.add_argument('--epoch', type=int, default=20, help="Number of training epoch(s)")
@@ -47,6 +47,7 @@ EPOCHS = args.epoch
 BATCH_SIZE = args.batch_size
 MAX_SEQ = 64
 HIDDEN_DIM = 300
+WEIGHT = torch.tensor([0.1, 0.3, 0.5, 0.1])
 
 random.seed(0)
 np.random.seed(0)
@@ -70,10 +71,14 @@ train_source, eval_source = train_test_split(source, test_size = args.ratio)
 train_target, eval_target = train_test_split(target, test_size = args.ratio)
 
 train_dataset = SentenceDataset(train_source, train_target)
-train_loader = DataLoader(train_dataset, batch_size = BATCH_SIZE, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size = BATCH_SIZE, shuffle=True) 
 
 eval_dataset = SentenceDataset(eval_source, eval_target)
 eval_loader = DataLoader(eval_dataset, batch_size = BATCH_SIZE, shuffle=True)
+
+save_path, tb_path = generate_model_path("seq", args.model)
+os.mkdir(save_path)
+print("Checkpoints will be saved into {}".format(save_path))
 
 def process_target(target, target_vocab=target_vocab):
     res = []
@@ -87,8 +92,6 @@ def process_target(target, target_vocab=target_vocab):
         res.append(tmp)
     return torch.tensor(res)
 
-embedding_matrix, word_to_idx, idx_to_wor = load_glove(args.glove)
-tokenizer = SpacyTokenizer(word_to_idx = word_to_idx, max_sequence_length=MAX_SEQ)
 
 """ Note about dimensions
 Encoder: Bidirectional
@@ -112,6 +115,8 @@ Decoder:
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 if args.model == "seq2seq":
+    embedding_matrix, word_to_idx, idx_to_wor = load_glove(args.glove)
+    tokenizer = SpacyTokenizer(word_to_idx = word_to_idx, max_sequence_length=MAX_SEQ)
     encoder = Encoder(torch.tensor(embedding_matrix), HIDDEN_DIM, HIDDEN_DIM).to(device)
     decoder = AttDecoder(target_vocab, encoder.get_hidden_dim(),embedding_matrix.shape[1], HIDDEN_DIM).to(device)
 
@@ -128,7 +133,7 @@ elif args.model == "greedy":
 model = model.to(device)
 optimizer = optim.AdamW(model.parameters(), lr = args.lr)
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=2)
-criterion = nn.CrossEntropyLoss().to(device)
+criterion = nn.CrossEntropyLoss(weight=WEIGHT ,ignore_index=3).to(device)
 
 best_val_acc = 0
 best_val_epoch = 1
@@ -140,6 +145,8 @@ for epoch in range(EPOCHS):
     total_train_loss = 0
     total_train_accuracy = 0
     total_train_tokens = 0
+    train_econ_pred = 0
+    train_econ_label = 0
 
     # Keep track of LR during scheduler testing
     writer.add_scalar("Learning rate", optimizer.param_groups[0]['lr'])
@@ -169,6 +176,9 @@ for epoch in range(EPOCHS):
             total_train_accuracy += (logits == label_ids)[mask].sum()
             total_train_tokens += mask.sum()
 
+            # Record ECON
+            train_econ_label += (label_ids == 2).sum()
+            train_econ_pred += (logits[label_ids==2]==2).sum()
             curr_loss = total_train_loss/(step+1)
             writer.add_scalar("Training loss", curr_loss)
             tepoch.set_postfix(loss = curr_loss)
@@ -177,11 +187,15 @@ for epoch in range(EPOCHS):
     writer.add_scalar("Training accuracy", train_accuracy)
 
     print("Train accuracy: {}, loss: {}".format(round(100*train_accuracy, 2), curr_loss))
+    print("Train ECON accuracy: {}".format(train_econ_pred/train_econ_label))
+
 
     # ====== Validation ==========
     total_val_loss = 0
     total_val_accuracy = 0
     total_val_tokens = 0
+    eval_econ_pred = 0
+    eval_econ_label = 0
     model.eval()
     for step, batch in enumerate(eval_loader):
         label = process_target(batch[1]).to(device)
@@ -200,12 +214,14 @@ for epoch in range(EPOCHS):
         mask = label_ids != target_vocab["<PAD>"]
         total_val_accuracy += (logits == label_ids)[mask].sum()
         total_val_tokens += mask.sum()
-
+        eval_econ_label += (label_ids == 2).sum()
+        eval_econ_pred += (logits[label_ids==2]==2).sum()
         curr_loss = total_val_loss/(step+1)
 
         writer.add_scalar("Validation loss", total_val_loss/(step+1))
     val_accuracy = total_val_accuracy/total_val_tokens
     print("Validation accuracy: {}, loss: {}".format(round(100*val_accuracy, 2), total_val_loss/(step+1)))
+    print("Validation ECON accuracy: {}".format(eval_econ_pred/eval_econ_label))
     writer.add_scalar("Validation accuracy", val_accuracy)
     
     # Track val loss each epoch on Scheduler
@@ -215,32 +231,32 @@ for epoch in range(EPOCHS):
     if val_accuracy > best_val_acc:
         best_val_acc = val_accuracy
         best_val_epoch = epoch + 1
-    #     print("Found a better model. Saving ...")
-    #     torch.save({'epoch': epoch,
-    #                 'num_class': NUM_CLASS,
-    #                 'max_seq_length': MAX_SEQ,
-    #                 'model': args.model,
-    #                 'embedding_size': embedding_size,
-    #                 'embedding': args.embedding,
-    #                 'model_state_dict': model.state_dict(),
-    #                 'optimizer_state_dict': optimizer.state_dict(),
-    #                 'loss': loss,
-    #                 'tokenizer': tokenizer,
-    #                 }, os.path.join(save_path,'best.tar'))
+        print("Found a better model. Saving ...")
+        torch.save({'epoch': epoch,
+                    'vocab': target_vocab,
+                    'max_seq_length': MAX_SEQ,
+                    'model': args.model,
+                    # 'embedding_size': embedding_size,
+                    # 'embedding': args.embedding,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'loss': loss,
+                    'tokenizer': tokenizer,
+                    }, os.path.join(save_path,'best.tar'))
 
-    # torch.save({'epoch': epoch,
-    #             'num_class': NUM_CLASS,
-    #             'max_seq_length': MAX_SEQ,
-    #             'model': args.model,
-    #             'embedding_size': embedding_size,
-    #             'embedding': args.embedding,
-    #             'model_state_dict': model.state_dict(),
-    #             'optimizer_state_dict': optimizer.state_dict(),
-    #             'loss': loss,
-    #             'tokenizer': tokenizer,
-    #             }, os.path.join(save_path,'model.tar'))
+    torch.save({'epoch': epoch,
+                'vocab': target_vocab,
+                'max_seq_length': MAX_SEQ,
+                'model': args.model,
+                # 'embedding_size': embedding_size,
+                # 'embedding': args.embedding,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': loss,
+                'tokenizer': tokenizer,
+                }, os.path.join(save_path,'model.tar'))
 
-    # print()
+    print()
 
 print("Best val accuracy {} on epoch {}".format(best_val_acc, best_val_epoch))
 
