@@ -32,7 +32,7 @@ wget https://dl.fbaipublicfiles.com/fasttext/vectors-crawl/cc.en.300.bin.gz
 gzip -d cc.en.300.bin.gz
 ```
 
-Verify that glove* files and cc.en.300.bin should be inside **pretrain/**
+Verify that glove* files and cc.en.300.bin are inside **pretrain/**
 
 
 Install huggingface Transformers
