@@ -1,6 +1,6 @@
 # Endpoint Detection Project
 
-## CSE538 NLP, Fall 2018
+## CSE538 NLP, Fall 2021
 
 ### Anh, Omkar, Sriram
 
