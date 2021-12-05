@@ -136,6 +136,3 @@ for data1 in data:
 f= open("/data/new_data_negative_user2_type2_first_scentence_incomplete.txt","w+")
 f.write("".join(list1))
 f.close()
-
-
-
