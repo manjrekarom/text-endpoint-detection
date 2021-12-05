@@ -2,15 +2,14 @@
 
 ## CSE538 NLP, Fall 2021
 
-### Anh, Omkar, Sriram
+### Members:
+* Huy Anh Nguyen (113094662)
+* Omkar Manjrekar (113287703)
+* Sriram Vithala (113166835)
 
-## Try it out on Colab?
-https://colab.research.google.com/drive/1cH_JirTMmzxqLL-9hFUlBwEpcPjdiwCt?usp=sharing
+## Task 1: Using classification
 
-## Try it locally
-Download the "text-detection-endpoint.zip" from https://drive.google.com/drive/folders/1lU8ZawQR4Xt75j37-IS_Uyu0WBCVdHGB?usp=sharing or clone from github https://github.com/manjrekarom/text-endpoint-detection
-
-### Requirements
+- Requirements
 
 Download and install fastText
 
@@ -45,31 +44,20 @@ Install huggingface Transformers
 pip install transformers
 ```
 
-Other dependencies
-```bash
-pip install -r requirements.txt
-```
-
 - Training the model
 
 There are two formulations, endpoint detection as a classification, and as sequence labeling.
 
 ```bash
 # seq labeling
-python seq_train.py --source dataset/endpoint/source.txt --target dataset/sentiment/target.txt --model bert
+python clf_train.py --model BERT --pos-data dataset/endpoint/positives_all_domains.txt --neg-data negatives_all_domain.txt
 ```
 
-- Results on UCI Sentiment Analysis Task
+## Task 2: Sequential Labelling
 
-| Embedding | Model | Best val acc | On epoch | Running time |
-| :-------: | :---: | :----------: | :------: | :----------: |
-|   GloVe   |  GRU  |    0.845     |    10    |     1.67     |
-|           | LSTM  |    0.853     |    10    |     1.63     |
-|           |  CNN  |    0.833     |    10    |     1.59     |
-| fastText  |  GRU  |    0.831     |    10    |     1.73     |
-|           | LSTM  |    0.815     |    10    |     1.64     |
-|           |  CNN  |    0.683     |    10    |     2.40     |
-|   BERT    |  GRU  |    0.855     |    10    |    16.87     |
-|           | LSTM  |     0.86     |    10    |    16.32     |
-|           |  CNN  |    0.882     |    10    |    24.16     |
-|           | BERT  |    0.953     |    10    |     3.23     |
+```bash
+# seq labeling
+python seq_train.py --source dataset/endpoint/source.txt --target dataset/sentiment/target.txt --model bert
+
+python seq_train.py --source dataset/endpoint/source.txt --target dataset/sentiment/target.txt --model bert
+```
