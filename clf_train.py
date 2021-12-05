@@ -160,11 +160,11 @@ for epoch in range(EPOCHS):
                 total_train_accuracy = np.concatenate([total_train_accuracy, flat_accuracy(logits, label_ids)])
 
             curr_loss = total_train_loss/(step+1)
-            writer.add_scalar("Training loss", curr_loss)
             tepoch.set_postfix(loss = curr_loss)
 
     train_accuracy = total_train_accuracy.sum()/len(total_train_accuracy)
-    writer.add_scalar("Training accuracy", train_accuracy)
+    writer.add_scalar("Training accuracy", train_accuracy, epoch)
+    writer.add_scalar("Training loss", curr_loss, epoch)
 
     print("Train accuracy: {}, loss: {}".format(round(100*train_accuracy, 2), curr_loss))
 
@@ -203,7 +203,8 @@ for epoch in range(EPOCHS):
         writer.add_scalar("Validation loss", total_val_loss/(step+1))
     val_accuracy = total_val_accuracy.sum()/len(total_val_accuracy)
     print("Validation accuracy: {}, loss: {}".format(round(100*val_accuracy, 2), total_val_loss/(step+1)))
-    writer.add_scalar("Validation accuracy", val_accuracy)
+    writer.add_scalar("Training loss", total_val_loss/(step+1), epoch)
+    writer.add_scalar("Validation accuracy", val_accuracy, epoch)
     
     # Track val loss each epoch on Scheduler
     scheduler.step(total_val_loss/(step+1))
