@@ -8,6 +8,9 @@ import os
 import time
 import random
 import torch
+
+from sklearn import metrics
+
 # Loading GloVe embedding
 
 def load_glove(path="pretrain/glove.6B.300d.txt"):
@@ -70,6 +73,8 @@ def generate_mask_fasttext(model, tokenizer, pad_vector, seq, max_sequence_lengt
             res.append(np.array(tmp))
     return torch.tensor(np.array(res)), mask
 
+def generate_mask_bert():
+    pass
 
 def generate_model_path(model_type, embedding_type, check_dir = "checkpoints"):
     """
@@ -112,3 +117,48 @@ def train_test_split(array, test_size, seed=0):
             train.append(array[i])
 
     return train, test
+
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self, averaged=True):
+        self.reset()
+        self.averaged = averaged
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        if not self.averaged:
+          self.sum += val
+        else:
+          self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
+def calc_metrics(logits, preds):
+    conf_mat = metrics.confusion_matrix(preds, np.argmax(logits, 1))
+    print(conf_mat)
+    FP = conf_mat.sum(axis=0) - np.diag(conf_mat)
+    FN = conf_mat.sum(axis=1) - np.diag(conf_mat)
+    TP = np.diag(conf_mat)
+    TN = conf_mat.sum() - (FP + FN + TP)
+    return TP, TN, FP, FN
+
+def calc_metrics_binary(logits, preds):
+    conf_mat = metrics.confusion_matrix(preds, np.argmax(logits, 1))
+    # print(conf_mat)
+    # return TP, TN, FP, FN; rows are actual; cols are predicted
+    return conf_mat[0,0], conf_mat[1, 1], conf_mat[1, 0], conf_mat[0,1]
+
+def calc_precision(tp, fp):
+    return tp / (tp + fp)
+
+def calc_recall(tp, fn):
+    return tp / (tp + fn)
+
+def calc_f1(precision, recall):
+    return 2 * precision * recall / (precision + recall)
