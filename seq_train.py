@@ -259,6 +259,3 @@ for epoch in range(EPOCHS):
     print()
 
 print("Best val accuracy {} on epoch {}".format(best_val_acc, best_val_epoch))
-
-
-

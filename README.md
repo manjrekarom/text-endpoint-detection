@@ -4,9 +4,13 @@
 
 ### Anh, Omkar, Sriram
 
-## Task 1: Using classification
+## Try it out on Colab?
+https://colab.research.google.com/drive/1cH_JirTMmzxqLL-9hFUlBwEpcPjdiwCt?usp=sharing
 
-- Requirements
+## Try it locally
+Download the "text-detection-endpoint.zip" from https://drive.google.com/drive/folders/1lU8ZawQR4Xt75j37-IS_Uyu0WBCVdHGB?usp=sharing or clone from github https://github.com/manjrekarom/text-endpoint-detection
+
+### Requirements
 
 Download and install fastText
 
@@ -39,6 +43,11 @@ Install huggingface Transformers
 
 ```bash
 pip install transformers
+```
+
+Other dependencies
+```bash
+pip install -r requirements.txt
 ```
 
 - Training the model
