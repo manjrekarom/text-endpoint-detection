@@ -172,20 +172,20 @@ for epoch in range(EPOCHS):
                 total_train_accuracy = np.concatenate([total_train_accuracy, flat_accuracy(logits, label_ids)])
 
             curr_loss = total_train_loss/(step+1)
-            writer.add_scalar("Training loss", curr_loss)
             tepoch.set_postfix(loss = curr_loss)
 
     train_accuracy = total_train_accuracy.sum()/len(total_train_accuracy)
     precision = calc_precision(tp.sum, fp.sum)
     recall = calc_recall(tp.sum, fn.sum)
     f1 = calc_f1(precision, recall)
-    
-    writer.add_scalar("Training accuracy", train_accuracy)
-    writer.add_scalar("Train Precision", precision)
-    writer.add_scalar("Train Recall", recall)
-    writer.add_scalar("Train F1", f1)
-    
+       
     # print("Accuracy by tp, tns...:", (tp.sum + tn.sum)/(tp.sum+tn.sum+fp.sum+fn.sum))
+    writer.add_scalar("Training accuracy", train_accuracy, epoch)
+    writer.add_scalar("Training loss", curr_loss, epoch)
+    writer.add_scalar("Train Precision", precision, epoch)
+    writer.add_scalar("Train Recall", recall, epoch)
+    writer.add_scalar("Train F1", f1, epoch)
+
     print("Train accuracy: {}, loss: {}".format(round(100*train_accuracy, 2), curr_loss))
     print(f"Train Precision: {precision}, Recall: {recall}, F1: {f1}")
 
@@ -233,18 +233,23 @@ for epoch in range(EPOCHS):
         else:
             total_val_accuracy = np.concatenate([total_val_accuracy, flat_accuracy(logits, label_ids)])     
         writer.add_scalar("Validation loss", total_val_loss/(step+1))
+    
     val_accuracy = total_val_accuracy.sum()/len(total_val_accuracy)
     precision = calc_precision(tp_val.sum, fp_val.sum)
     recall = calc_recall(tp_val.sum, fn_val.sum)
     f1 = calc_f1(precision, recall)
 
-    writer.add_scalar("Val Precision", precision)
-    writer.add_scalar("Val Recall", recall)
-    writer.add_scalar("Val F1", f1)
-    writer.add_scalar("Validation accuracy", val_accuracy)
-
     print("Validation accuracy: {}, loss: {}".format(round(100*val_accuracy, 2), total_val_loss/(step+1)))
     print(f"Val Precision: {precision}, Recall: {recall}, F1: {f1}")
+
+    print("Validation accuracy: {}, loss: {}".format(round(100*val_accuracy, 2), total_val_loss/(step+1)))
+    writer.add_scalar("Training loss", total_val_loss/(step+1), epoch)
+    writer.add_scalar("Validation accuracy", val_accuracy, epoch)
+    writer.add_scalar("Val Precision", precision, epoch)
+    writer.add_scalar("Val Recall", recall, epoch)
+    writer.add_scalar("Val F1", f1, epoch)
+
+
     
     # Track val loss each epoch on Scheduler
     scheduler.step(total_val_loss/(step+1))
