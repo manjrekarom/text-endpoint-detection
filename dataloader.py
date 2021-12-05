@@ -19,3 +19,18 @@ class SentenceDataset(Dataset):
             return self.sentences[idx]
         else:
             return self.sentences[idx], self.labels[idx]
+
+
+# class SequenceDataset(Dataset):
+#     def __init__(self, src_sequence, target_sequence = None):
+#         self.sentences = src_sequence
+#         self.label = target_sequence
+
+#     def __len__(self):
+#         return len(self.sentences)
+
+#     def __getitem__(self, idx):
+#         if self.labels is None:
+#             return self.sentences[idx]
+#         else:
+#             return self.sentences[idx], self.labels[idx]

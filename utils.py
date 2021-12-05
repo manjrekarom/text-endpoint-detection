@@ -70,6 +70,8 @@ def generate_mask_fasttext(model, tokenizer, pad_vector, seq, max_sequence_lengt
             res.append(np.array(tmp))
     return torch.tensor(np.array(res)), mask
 
+def generate_mask_bert():
+    pass
 
 def generate_model_path(model_type, embedding_type, check_dir = "checkpoints"):
     """
